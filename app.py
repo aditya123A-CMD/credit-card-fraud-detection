@@ -6,9 +6,9 @@ import os
 app = Flask(__name__)
 
 # ── Load model files ──────────────────────────────────────
-MODEL_PATH   = os.path.join('models', 'fraud_model.pkl')
-SCALER_PATH  = os.path.join('models', 'scaler.pkl')
-FEATURES_PATH = os.path.join('models', 'features.pkl')
+MODEL_PATH = 'fraud_model.pkl'
+SCALER_PATH = 'scaler.pkl'
+FEATURES_PATH = 'features.pkl'
 
 model        = None
 scaler       = None
@@ -95,6 +95,7 @@ import os
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
