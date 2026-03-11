@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FraudShield — Neural Detection System v2.4</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --green: #00ff88;
+    --green-dim: #00cc6a;
+    --green-glow: rgba(0,255,136,0.18);
+    --red: #ff3860;
+    --red-glow: rgba(255,56,96,0.18);
+    --yellow: #ffdd57;
+    --bg: #050d0a;
+    --panel: rgba(0,20,12,0.82);
+    --border: rgba(0,255,136,0.22);
+    --text: #c8ffe0;
+    --muted: #5a8a70;
+    --input-bg: rgba(0,255,136,0.06);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  #neural-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.55;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 40%, transparent 30%, rgba(5,13,10,0.85) 100%);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.08) 3px,
+      rgba(0,0,0,0.08) 4px
+    );
+    animation: scanmove 8s linear infinite;
+  }
+  @keyframes scanmove {
+    from { background-position: 0 0; }
+    to   { background-position: 0 100px; }
+  }
+
+  .app-wrap {
+    position: relative;
+    z-index: 10;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+
+  .terminal-bar {
+    background: rgba(0,12,6,0.95);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+  .terminal-bar .dot { width:10px;height:10px;border-radius:50%; }
+  .dot-red { background:#ff5f56; }
+  .dot-yellow { background:#ffbd2e; }
+  .dot-green { background:#27c93f; }
+  .terminal-bar .cmd { color: var(--green); margin-left: 12px; flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .terminal-bar .status { color: var(--green); display:flex; align-items:center; gap:6px; }
+  .status-dot { width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.4s ease infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .hero {
+    padding: 54px 0 32px;
+    text-align: left;
+  }
+  .hero-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hero-label::before { content:''; flex:0 0 30px; height:1px; background:var(--green); }
+  .hero h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(38px, 7vw, 78px);
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: -1px;
+    color: #fff;
+    text-shadow: 0 0 40px rgba(0,255,136,0.35), 0 0 80px rgba(0,255,136,0.15);
+  }
+  .hero h1 span { color: var(--green); }
+  .hero-sub {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-top: 16px;
+    max-width: 520px;
+    line-height: 1.6;
+    letter-spacing: 0.3px;
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 14px;
+    margin: 30px 0 36px;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    flex: 1;
+    min-width: 130px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::after {
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;height:2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity:0.6;
+  }
+  .stat-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--green);
+    text-shadow: 0 0 14px var(--green);
+  }
+  .stat-value.red { color: var(--red); text-shadow: 0 0 14px var(--red); }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+  }
+  .panel-header {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0,255,136,0.04);
+  }
+  .panel-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--green);
+    text-transform: uppercase;
+  }
+  .panel-body { padding: 24px 22px; }
+
+  .sample-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .sample-btn {
+    border-radius: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.2s;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-align: left;
+  }
+  .sample-btn.legit {
+    background: rgba(0,255,136,0.07);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .sample-btn.legit:hover { background: rgba(0,255,136,0.14); box-shadow: 0 0 16px rgba(0,255,136,0.2); }
+  .sample-btn.fraud {
+    background: rgba(255,56,96,0.07);
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .sample-btn.fraud:hover { background: rgba(255,56,96,0.14); box-shadow: 0 0 16px rgba(255,56,96,0.2); }
+  .sample-btn .btn-tag {
+    font-size: 9px;
+    letter-spacing: 2px;
+    opacity: 0.7;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .sample-btn .btn-name { font-size: 13px; font-weight: bold; }
+
+  .inputs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-group label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--green);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .input-group label .range-hint {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .input-group input {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 13px 14px;
+    color: #ffffff;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    width: 100%;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    outline: none;
+  }
+  .input-group input:focus {
+    border-color: var(--green);
+    background: rgba(0,255,136,0.10);
+    box-shadow: 0 0 0 3px rgba(0,255,136,0.12), inset 0 0 20px rgba(0,255,136,0.05);
+  }
+  .input-group input::placeholder { color: rgba(255,255,255,0.2); }
+
+  .scan-btn {
+    width: 100%;
+    margin-top: 24px;
+    padding: 18px;
+    background: linear-gradient(135deg, rgba(0,255,136,0.15), rgba(0,200,100,0.08));
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    color: var(--green);
+    font-family: 'Orbitron', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+  }
+  .scan-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(0,255,136,0.12), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+  .scan-btn:hover::before { transform: translateX(100%); }
+  .scan-btn:hover {
+    background: rgba(0,255,136,0.18);
+    box-shadow: 0 0 30px rgba(0,255,136,0.3), inset 0 0 30px rgba(0,255,136,0.05);
+    letter-spacing: 6px;
+  }
+  .scan-btn:active { transform: scale(0.98); }
+
+  .result-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .verdict-box {
+    border-radius: 12px;
+    padding: 36px 24px;
+    text-align: center;
+    border: 1px solid;
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel);
+    backdrop-filter: blur(12px);
+    transition: all 0.4s;
+  }
+  .verdict-box.waiting { border-color: var(--border); }
+  .verdict-box.safe    { border-color: var(--green); box-shadow: 0 0 40px rgba(0,255,136,0.15); }
+  .verdict-box.fraud   { border-color: var(--red);   box-shadow: 0 0 40px rgba(255,56,96,0.2); }
+
+  .verdict-icon { font-size: 52px; margin-bottom: 12px; line-height:1; }
+  .verdict-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: 4px;
+  }
+  .verdict-box.waiting .verdict-label { color: var(--muted); font-size: 14px; letter-spacing:3px; }
+  .verdict-box.safe  .verdict-label { color: var(--green); text-shadow: 0 0 20px var(--green); }
+  .verdict-box.fraud .verdict-label { color: var(--red);   text-shadow: 0 0 20px var(--red); }
+
+  .verdict-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-top: 8px;
+    text-transform: uppercase;
+  }
+
+  .prob-section { padding: 18px 22px; }
+  .prob-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .prob-label span { color: #fff; font-size:13px; }
+  .prob-track {
+    height: 10px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 99px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .prob-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.7s cubic-bezier(0.34,1.56,0.64,1), background 0.4s;
+    width: 0%;
+    background: var(--green);
+  }
+  .prob-fill.danger { background: linear-gradient(90deg, var(--yellow), var(--red)); box-shadow: 0 0 12px var(--red); }
+
+  .feature-list { display: flex; flex-direction: column; gap: 10px; padding: 18px 22px; }
+  .feature-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+  }
+  .feature-key { color: var(--muted); width: 80px; flex-shrink:0; }
+  .feature-bar-track { flex:1; height:5px; background: rgba(255,255,255,0.07); border-radius:99px; }
+  .feature-bar-fill { height:100%;border-radius:99px;background:var(--green);transition:width 0.5s; }
+  .feature-val { width:60px; text-align:right; color:#fff; }
+
+  .footer {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .footer-brand {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    font-weight:700;
+    color: var(--green);
+    letter-spacing:2px;
+  }
+  .footer-info {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing:1px;
+  }
+
+  @keyframes pulse-green {
+    0%,100% { box-shadow: 0 0 40px rgba(0,255,136,0.15); }
+    50%      { box-shadow: 0 0 70px rgba(0,255,136,0.35); }
+  }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 40px rgba(255,56,96,0.2); }
+    50%      { box-shadow: 0 0 70px rgba(255,56,96,0.45); }
+  }
+  .verdict-box.safe  { animation: pulse-green 2.5s ease infinite; }
+  .verdict-box.fraud { animation: pulse-red   1.8s ease infinite; }
+
+  @keyframes scanning {
+    0% { transform: translateY(-100%); opacity:0; }
+    20% { opacity:1; }
+    80% { opacity:1; }
+    100% { transform: translateY(400%); opacity:0; }
+  }
+  .scan-line {
+    position: absolute;
+    left:0; right:0; height:2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    animation: scanning 1.5s ease-in-out;
+    display: none;
+  }
+  .scan-line.active { display:block; }
+</style>
+</head>
+<body>
+
+<canvas id="neural-canvas"></canvas>
+<div class="scanlines"></div>
+
+<div class="terminal-bar">
+  <div class="dot dot-red"></div>
+  <div class="dot dot-yellow"></div>
+  <div class="dot dot-green"></div>
+  <div class="cmd">$ neural_model --status=active --accuracy=99.0% --mode=deep_scan | transaction_analyzer</div>
+  <div class="status"><div class="status-dot"></div>SYSTEM ONLINE</div>
+</div>
+
+<div class="app-wrap">
+  <div class="hero">
+    <div class="hero-label">FraudShield Neural Detection System v2.4</div>
+    <h1>CREDIT <span>FRAUD</span><br>DETECTION</h1>
+    <p class="hero-sub">Real-time ML-powered transaction analysis. Enter values and run deep scan to detect fraudulent patterns instantly.</p>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Scans</div>
+      <div class="stat-value" id="stat-scans">001</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Fraud Detected</div>
+      <div class="stat-value red" id="stat-fraud">001</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Accuracy</div>
+      <div class="stat-value">99.0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Response Time</div>
+      <div class="stat-value" id="stat-response">&lt;50ms</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">// Transaction Input</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);">10 PARAMETERS</div>
+      </div>
+      <div class="panel-body">
+        <div class="sample-btns">
+          <button class="sample-btn legit" onclick="loadSample('legit')">
+            <span class="btn-tag">▶ LOAD SAMPLE</span>
+            <span class="btn-name">✓ LEGIT TRANSACTION</span>
+          </button>
+          <button class="sample-btn fraud" onclick="loadSample('fraud')">
+            <span class="btn-tag">⚠ LOAD SAMPLE</span>
+            <span class="btn-name">✗ FRAUD TRANSACTION</span>
+          </button>
+        </div>
+
+        <div class="inputs-grid">
+          <div class="input-group"><label>Amount ($)</label><input type="number" id="inp-amount" value="149.62"/></div>
+          <div class="input-group"><label>Hour (0–23)</label><input type="number" id="inp-hour" value="14"/></div>
+          <div class="input-group"><label>Feature V1</label><input type="number" id="inp-v1" step="0.01" value="-0.21"/></div>
+          <div class="input-group"><label>Feature V2</label><input type="number" id="inp-v2" step="0.01" value="0.36"/></div>
+          <div class="input-group"><label>Feature V3</label><input type="number" id="inp-v3" step="0.01" value="0.52"/></div>
+          <div class="input-group"><label>Feature V4</label><input type="number" id="inp-v4" step="0.01" value="-0.08"/></div>
+          <div class="input-group"><label>Feature V5</label><input type="number" id="inp-v5" step="0.01" value="0.15"/></div>
+          <div class="input-group"><label>Feature V6</label><input type="number" id="inp-v6" step="0.01" value="-0.33"/></div>
+          <div class="input-group"><label>Feature V7</label><input type="number" id="inp-v7" step="0.01" value="0.44"/></div>
+          <div class="input-group"><label>Feature V8</label><input type="number" id="inp-v8" step="0.01" value="-0.12"/></div>
+        </div>
+        <button class="scan-btn" onclick="runScan()">⬡ RUN DEEP SCAN</button>
+      </div>
+    </div>
+
+    <div class="result-panel">
+      <div class="verdict-box waiting" id="verdict-box">
+        <div class="scan-line" id="scan-line"></div>
+        <div class="verdict-icon" id="verdict-icon">◎</div>
+        <div class="verdict-label" id="verdict-label">AWAITING SCAN</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">// Fraud Probability</div>
+          <div id="prob-pct">—</div>
+        </div>
+        <div class="prob-section">
+          <div class="prob-label"><span>RISK LEVEL</span><span id="risk-label">—</span></div>
+          <div class="prob-track"><div class="prob-fill" id="prob-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">// Feature Analysis</div></div>
+        <div class="feature-list" id="feature-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── CANVAS LOGIC ── */
+const canvas = document.getElementById('neural-canvas');
+const ctx = canvas.getContext('2d');
+let nodes = [], W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+function initNodes() {
+  nodes = [];
+  for (let i = 0; i < 50; i++) {
+    nodes.push({ x: Math.random() * W, y: Math.random() * H, vx: Math.random() - 0.5, vy: Math.random() - 0.5 });
+  }
+}
+initNodes();
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  nodes.forEach(n => {
+    n.x += n.vx; n.y += n.vy;
+    if(n.x<0||n.x>W) n.vx*=-1; if(n.y<0||n.y>H) n.vy*=-1;
+    ctx.fillStyle = "#00ff8822"; ctx.beginPath(); ctx.arc(n.x, n.y, 2, 0, Math.PI*2); ctx.fill();
+  });
+  requestAnimationFrame(draw);
+}
+draw();
+
+/* ── APP LOGIC ── */
+const SAMPLES = {
+  legit: { amount:149, hour:14, v1:-0.2, v2:0.3, v3:0.5, v4:-0.1, v5:0.1, v6:-0.3, v7:0.4, v8:-0.1 },
+  fraud: { amount:1850, hour:2, v1:-3.5, v2:0.6, v3:-4.1, v4:2.9, v5:-5.2, v6:3.8, v7:-4.7, v8:2.1 }
+};
+
+function loadSample(type) {
+  const s = SAMPLES[type];
+  Object.keys(s).forEach(key => document.getElementById(`inp-${key}`).value = s[key]);
+}
+
+let scans = 0, frauds = 0;
+function runScan() {
+  const amount = parseFloat(document.getElementById('inp-amount').value);
+  const hour = parseFloat(document.getElementById('inp-hour').value);
+  const v1 = parseFloat(document.getElementById('inp-v1').value);
+  const v2 = parseFloat(document.getElementById('inp-v2').value);
+  const v3 = parseFloat(document.getElementById('inp-v3').value);
+  const v4 = parseFloat(document.getElementById('inp-v4').value);
+  const v5 = parseFloat(document.getElementById('inp-v5').value);
+  const v6 = parseFloat(document.getElementById('inp-v6').value);
+  const v7 = parseFloat(document.getElementById('inp-v7').value);
+  const v8 = parseFloat(document.getElementById('inp-v8').value);
+
+  let score = (amount > 1000 ? 0.4 : 0) + (Math.abs(v1) > 2 ? 0.3 : 0) + (Math.abs(v3) > 3 ? 0.3 : 0);
+  score = Math.min(score, 1);
+  const isFraud = score > 0.5;
+
+  document.getElementById('scan-line').classList.add('active');
+  setTimeout(() => {
+    document.getElementById('scan-line').classList.remove('active');
+    scans++; if(isFraud) frauds++;
+    document.getElementById('stat-scans').innerText = scans.toString().padStart(3,'0');
+    document.getElementById('stat-fraud').innerText = frauds.toString().padStart(3,'0');
+    
+    const box = document.getElementById('verdict-box');
+    box.className = `verdict-box ${isFraud ? 'fraud' : 'safe'}`;
+    document.getElementById('verdict-label').innerText = isFraud ? "FRAUD DETECTED" : "LEGITIMATE";
+    document.getElementById('prob-pct').innerText = Math.round(score * 100) + "%";
+    document.getElementById('prob-fill').style.width = (score * 100) + "%";
+
+    const features = [
+        { key: 'AMOUNT', raw: amount, max: 2000 },
+        { key: 'HOUR',   raw: hour,   max: 24 },
+        { key: 'V1',     raw: v1,     max: 5 },
+        { key: 'V2',     raw: v2,     max: 5 },
+        { key: 'V3',     raw: v3,     max: 5 },
+        { key: 'V4',     raw: v4,     max: 5 },
+        { key: 'V5',     raw: v5,     max: 5 },
+        { key: 'V6',     raw: v6,     max: 5 },
+        { key: 'V7',     raw: v7,     max: 5 },
+        { key: 'V8',     raw: v8,     max: 5 }
+    ];
+
+    document.getElementById('feature-list').innerHTML = features.map(f => {
+      const w = Math.min(Math.abs(f.raw / f.max) * 100, 100);
+      return `<div class="feature-row">
+        <div class="feature-key">${f.key}</div>
+        <div class="feature-bar-track"><div class="feature-bar-fill" style="width:${w}%"></div></div>
+        <div class="feature-val">${f.raw}</div>
+      </div>`;
+    }).join('');
+  }, 1000);
+}
+</script>
+</body>
+</html>
